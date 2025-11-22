@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"distributed-job-queue/internal/job"
@@ -35,8 +36,10 @@ func (b *Broadcaster) Publish(msg string) {
 // server struct
 
 type Server struct {
-	svc *job.Service
-	b   *Broadcaster
+	svc      *job.Service
+	b        *Broadcaster
+	pingMu   sync.Mutex
+	lastPing time.Time
 }
 
 func NewServer(svc *job.Service) *Server {
@@ -186,12 +189,19 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(m)
 }
 
 // PingWorker attempts to wake up the worker service by calling its health endpoint
 func (s *Server) PingWorker() {
+	s.pingMu.Lock()
+	if time.Since(s.lastPing) < 30*time.Second {
+		s.pingMu.Unlock()
+		return
+	}
+	s.lastPing = time.Now()
+	s.pingMu.Unlock()
+
 	workerURL := os.Getenv("WORKER_URL")
 	if workerURL == "" {
 		workerURL = "http://localhost:10000/health"

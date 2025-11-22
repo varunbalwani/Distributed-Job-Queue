@@ -35,9 +35,14 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	log.Println("Worker service running on port 10000")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "10000"
+	}
+
+	log.Printf("Worker service running on port %s", port)
 	go func() {
-		if err := http.ListenAndServe(":10000", nil); err != nil {
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
 			log.Fatalf("http server failed: %v", err)
 		}
 	}()
