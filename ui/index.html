@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributed Job Queue Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent-color: #3b82f6;
+      --accent-hover: #2563eb;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --error-color: #ef4444;
+      --border-color: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .status-indicator {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--error-color);
+    }
+
+    .status-dot.connected {
+      background-color: var(--success-color);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 2rem;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+    }
+
+    /* Form Styles */
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: var(--bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 0.5rem;
+      color: var(--text-primary);
+      font-family: inherit;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+
+    button {
+      background-color: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: var(--accent-hover);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Table Styles */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge.pending {
+      background-color: rgba(245, 158, 11, 0.1);
+      color: var(--warning-color);
+    }
+
+    .badge.running {
+      background-color: rgba(59, 130, 246, 0.1);
+      color: var(--accent-color);
+    }
+
+    .badge.done {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: var(--success-color);
+    }
+
+    .badge.failed {
+      background-color: rgba(239, 68, 68, 0.1);
+      color: var(--error-color);
+    }
+
+    /* Logs */
+    #logs {
+      font-family: 'Courier New', monospace;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 1rem;
+    }
+
+    .log-entry {
+      margin-bottom: 0.25rem;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 2px;
+    }
+
+    .log-time {
+      color: #64748b;
+      margin-right: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>Job Queue Dashboard</h1>
+      <div class="status-indicator">
+        <div id="connection-dot" class="status-dot"></div>
+        <span id="connection-status">Connecting...</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Left Column: Submit Job -->
+      <div class="card">
+        <h2>Submit New Job</h2>
+        <form id="job-form">
+          <div class="form-group">
+            <label for="tenant">Tenant ID</label>
+            <input type="text" id="tenant" value="demo" required>
+          </div>
+          <div class="form-group">
+            <label for="payload">Payload (JSON)</label>
+            <textarea id="payload" rows="4" required>{"action": "process_data", "value": 123}</textarea>
+          </div>
+          <button type="submit" id="submit-btn">Submit Job</button>
+        </form>
+        <div id="logs"></div>
+      </div>
+
+      <!-- Right Column: Job List -->
+      <div class="card">
+        <h2>Recent Jobs</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Job ID</th>
+                <th>Tenant</th>
+                <th>Status</th>
+                <th>Last Update</th>
+              </tr>
+            </thead>
+            <tbody id="jobs-table-body">
+              <!-- Jobs will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const jobs = new Map();
+    const tableBody = document.getElementById('jobs-table-body');
+    const logsDiv = document.getElementById('logs');
+    const statusDot = document.getElementById('connection-dot');
+    const statusText = document.getElementById('connection-status');
+
+    // Event Source
+    const ev = new EventSource('/events');
+
+    ev.onopen = () => {
+      statusDot.classList.add('connected');
+      statusText.textContent = 'Connected';
+      log('System', 'Connected to event stream');
+    };
+
+    ev.onerror = () => {
+      statusDot.classList.remove('connected');
+      statusText.textContent = 'Disconnected - Reconnecting...';
+    };
+
+    ev.addEventListener('update', handleEvent);
+    ev.addEventListener('replay', handleEvent); // Handle replay same as update
+
+    function handleEvent(e) {
+      try {
+        const data = JSON.parse(e.data);
+        // data structure: { event: "...", job_id: "...", payload: {...} }
+        // payload inside is the job object or event payload
+
+        // If payload is stringified JSON, parse it
+        let jobData = data.payload;
+        if (typeof jobData === 'string') {
+          try { jobData = JSON.parse(jobData); } catch (e) { }
+        }
+
+        updateJob(data.job_id, jobData.tenant || 'unknown', jobData.status || data.event, new Date().toLocaleTimeString());
+
+        if (data.event !== 'replay') {
+          log('Event', `Job ${data.job_id.substring(0, 8)}... : ${data.event}`);
+        }
+      } catch (err) {
+        console.error('Error parsing event:', err);
+      }
+    }
+
+    function updateJob(id, tenant, status, time) {
+      const existing = jobs.get(id);
+
+      // Define status priority (higher number = later in lifecycle)
+      const statusPriority = {
+        'submitted': 1,
+        'pending': 1,
+        'started': 2,
+        'running': 2,
+        'retry': 1, // Goes back to pending
+        'timeout': 1, // Goes back to pending
+        'done': 3,
+        'failed_dlq': 3
+      };
+
+      // Only update if new status has higher or equal priority
+      if (existing) {
+        const existingPriority = statusPriority[existing.status] || 0;
+        const newPriority = statusPriority[status] || 0;
+        if (newPriority < existingPriority) {
+          return; // Don't downgrade to earlier state
+        }
+      }
+
+      jobs.set(id, { tenant, status, time });
+      renderTable();
+    }
+
+    function renderTable() {
+      // Convert map to array, sort by time (newest first), and render
+      const sortedJobs = Array.from(jobs.entries()).reverse(); // Simple reverse for now, ideally sort by timestamp
+
+      tableBody.innerHTML = sortedJobs.map(([id, job]) => `
+                <tr>
+                    <td style="font-family: monospace;">${id.substring(0, 8)}...</td>
+                    <td>${job.tenant}</td>
+                    <td><span class="badge ${getBadgeClass(job.status)}">${job.status}</span></td>
+                    <td>${job.time}</td>
+                </tr>
+            `).join('');
+    }
+
+    function getBadgeClass(status) {
+      if (status.includes('pending') || status === 'submitted') return 'pending';
+      if (status === 'running' || status === 'started') return 'running';
+      if (status === 'done') return 'done';
+      return 'failed';
+    }
+
+    function log(source, message) {
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      div.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span> <strong>${source}:</strong> ${message}`;
+      logsDiv.insertBefore(div, logsDiv.firstChild);
+    }
+
+    // Form Submission
+    document.getElementById('job-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const tenant = document.getElementById('tenant').value;
+      const payloadStr = document.getElementById('payload').value;
+
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      try {
+        const res = await fetch('/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenant: tenant,
+            payload: JSON.parse(payloadStr),
+            idempotency_key: crypto.randomUUID()
+          })
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+
+        const job = await res.json();
+        log('System', `Job submitted successfully: ${job.id}`);
+        // Optimistic update
+        updateJob(job.id, job.tenant_id, 'pending', new Date().toLocaleTimeString());
+
+      } catch (err) {
+        log('Error', `Failed to submit job: ${err.message}`);
+        alert('Failed to submit job: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit Job';
+      }
+    });
+  </script>
+</body>
+
+</html>

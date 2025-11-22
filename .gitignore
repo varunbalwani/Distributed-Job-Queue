@@ -1,0 +1,60 @@
+# Binaries and executables
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build artifacts
+*.test
+*.out
+go.work
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Log files
+*.log
+*_stderr.txt
+*_stdout.txt
+
+# Documentation (internal/development notes)
+CHALLENGES.md
+OPTIMIZATION.md
+CLEANUP_SUMMARY.md
+
+# Test artifacts
+tests/test.db
+tests/*.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS-specific files
+Thumbs.db
+desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment files
+.env
+.env.local
+
+# Coverage reports
+coverage.txt
+*.coverage
+*.coverprofile
+
+# Vendor directory (if using)
+vendor/
