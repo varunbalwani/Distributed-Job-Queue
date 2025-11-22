@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"distributed-job-queue/internal/job"
@@ -148,6 +149,9 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("event: ping\ndata: \n\n"))
 	flusher.Flush()
 
+	// Ping worker to wake it up if needed
+	go s.PingWorker()
+
 	// Replay recent events for this client
 	if evs, err := s.svc.RecentEvents(50); err == nil {
 		for i := len(evs) - 1; i >= 0; i-- {
@@ -182,5 +186,31 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(m)
+}
+
+// PingWorker attempts to wake up the worker service by calling its health endpoint
+func (s *Server) PingWorker() {
+	workerURL := os.Getenv("WORKER_URL")
+	if workerURL == "" {
+		workerURL = "http://localhost:10000/health"
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	log.Printf("Pinging worker service at %s...", workerURL)
+	resp, err := client.Get(workerURL)
+	if err != nil {
+		log.Printf("Warning: Failed to ping worker service: %v", err)
+		log.Println("Make sure the worker service is running with: go run ./cmd/worker/main.go")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		log.Println("Worker service is alive and responding")
+	} else {
+		log.Printf("Worker service responded with status: %d", resp.StatusCode)
+	}
 }

@@ -16,7 +16,6 @@ A production-ready distributed job queue and worker system built with Go and Pos
 - ✅ **Automatic Retries**: Failed jobs automatically retry with exponential backoff
 - ✅ **Dead Letter Queue**: Failed jobs moved to DLQ after max retries
 - ✅ **Lease-based Processing**: Prevents duplicate processing with automatic lease recovery
-- ✅ **Health Checks**: Worker service health monitoring
 - ✅ **Beautiful Dashboard**: Real-time job monitoring UI
 
 ## Quick Start (Local)
