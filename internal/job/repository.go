@@ -40,7 +40,7 @@ var ErrNotFound = errors.New("not found")
 func (r *Repository) CreateIfNotExist(j *Job) (*Job, error) {
 	// check idempotency
 	if j.IdempotencyKey != "" {
-		row := r.db.QueryRow("SELECT id, status, payload, retries, max_retries, lease_until, created_at, updated_at FROM jobs WHERE tenant_id=? AND idempotency_key=?", j.TenantID, j.IdempotencyKey)
+		row := r.db.QueryRow("SELECT id, status, payload, retries, max_retries, lease_until, created_at, updated_at FROM jobs WHERE tenant_id=$1 AND idempotency_key=$2", j.TenantID, j.IdempotencyKey)
 		var id string
 		if err := row.Scan(&id, &j.Status, &j.Payload, &j.Retries, &j.MaxRetries, &j.LeaseUntil, &j.CreatedAt, &j.UpdatedAt); err == nil {
 			j.ID = id
@@ -52,7 +52,7 @@ func (r *Repository) CreateIfNotExist(j *Job) (*Job, error) {
 	j.Status = "pending"
 	j.CreatedAt = now
 	j.UpdatedAt = now
-	_, err := r.db.Exec("INSERT INTO jobs(id, tenant_id, idempotency_key, payload, status, retries, max_retries, lease_until, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+	_, err := r.db.Exec("INSERT INTO jobs(id, tenant_id, idempotency_key, payload, status, retries, max_retries, lease_until, created_at, updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
 		j.ID, j.TenantID, j.IdempotencyKey, j.Payload, j.Status, j.Retries, j.MaxRetries, j.LeaseUntil, j.CreatedAt, j.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (r *Repository) CreateIfNotExist(j *Job) (*Job, error) {
 }
 
 func (r *Repository) GetByID(id string) (*Job, error) {
-	row := r.db.QueryRow("SELECT id, tenant_id, idempotency_key, payload, status, retries, max_retries, lease_until, created_at, updated_at FROM jobs WHERE id=?", id)
+	row := r.db.QueryRow("SELECT id, tenant_id, idempotency_key, payload, status, retries, max_retries, lease_until, created_at, updated_at FROM jobs WHERE id=$1", id)
 	var j Job
 	if err := row.Scan(&j.ID, &j.TenantID, &j.IdempotencyKey, &j.Payload, &j.Status, &j.Retries, &j.MaxRetries, &j.LeaseUntil, &j.CreatedAt, &j.UpdatedAt); err != nil {
 		if err == sql.ErrNoRows {
@@ -73,7 +73,7 @@ func (r *Repository) GetByID(id string) (*Job, error) {
 }
 
 func (r *Repository) CountRunningByTenant(tenant string) (int, error) {
-	row := r.db.QueryRow("SELECT COUNT(1) FROM jobs WHERE tenant_id=? AND status='running'", tenant)
+	row := r.db.QueryRow("SELECT COUNT(1) FROM jobs WHERE tenant_id=$1 AND status='running'", tenant)
 	var c int
 	if err := row.Scan(&c); err != nil {
 		return 0, err
@@ -83,7 +83,7 @@ func (r *Repository) CountRunningByTenant(tenant string) (int, error) {
 
 func (r *Repository) CountCreatedInLastMin(tenant string) (int, error) {
 	since := time.Now().Add(-1 * time.Minute).Unix()
-	row := r.db.QueryRow("SELECT COUNT(1) FROM jobs WHERE tenant_id=? AND created_at>=?", tenant, since)
+	row := r.db.QueryRow("SELECT COUNT(1) FROM jobs WHERE tenant_id=$1 AND created_at>=$2", tenant, since)
 	var c int
 	if err := row.Scan(&c); err != nil {
 		return 0, err
@@ -110,7 +110,7 @@ func (r *Repository) LeaseNext(leaseSeconds int) (*Job, error) {
 		return nil, err
 	}
 
-	if _, err := tx.Exec("UPDATE jobs SET status='running', lease_until=?, updated_at=? WHERE id=?", leaseUntil, now, j.ID); err != nil {
+	if _, err := tx.Exec("UPDATE jobs SET status='running', lease_until=$1, updated_at=$2 WHERE id=$3", leaseUntil, now, j.ID); err != nil {
 		return nil, err
 	}
 
@@ -125,29 +125,29 @@ func (r *Repository) LeaseNext(leaseSeconds int) (*Job, error) {
 
 func (r *Repository) MarkDone(id string) error {
 	now := time.Now().Unix()
-	_, err := r.db.Exec("UPDATE jobs SET status='done', updated_at=? WHERE id=?", now, id)
+	_, err := r.db.Exec("UPDATE jobs SET status='done', updated_at=$1 WHERE id=$2", now, id)
 	return err
 }
 
 func (r *Repository) MarkFailedOrRetry(id string) (bool, error) {
-	row := r.db.QueryRow("SELECT retries, max_retries FROM jobs WHERE id=?", id)
+	row := r.db.QueryRow("SELECT retries, max_retries FROM jobs WHERE id=$1", id)
 	var retries, maxR int
 	if err := row.Scan(&retries, &maxR); err != nil {
 		return false, err
 	}
 	now := time.Now().Unix()
 	if retries+1 >= maxR {
-		_, err := r.db.Exec("UPDATE jobs SET status='failed_dlq', retries=?, updated_at=? WHERE id=?", retries+1, now, id)
+		_, err := r.db.Exec("UPDATE jobs SET status='failed_dlq', retries=$1, updated_at=$2 WHERE id=$3", retries+1, now, id)
 		return true, err
 	}
-	_, err := r.db.Exec("UPDATE jobs SET status='pending', retries=?, updated_at=? WHERE id=?", retries+1, now, id)
+	_, err := r.db.Exec("UPDATE jobs SET status='pending', retries=$1, updated_at=$2 WHERE id=$3", retries+1, now, id)
 	return false, err
 }
 
 func (r *Repository) RequeueExpiredLeases() ([]string, error) {
 	now := time.Now().Unix()
 	// Find expired jobs first
-	rows, err := r.db.Query("SELECT id FROM jobs WHERE status='running' AND lease_until<?", now)
+	rows, err := r.db.Query("SELECT id FROM jobs WHERE status='running' AND lease_until<$1", now)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (r *Repository) RequeueExpiredLeases() ([]string, error) {
 	// Update them
 	// In a real app, do this in a transaction or batch
 	for _, id := range ids {
-		_, _ = r.db.Exec("UPDATE jobs SET status='pending', updated_at=? WHERE id=?", now, id)
+		_, _ = r.db.Exec("UPDATE jobs SET status='pending', updated_at=$1 WHERE id=$2", now, id)
 	}
 	return ids, nil
 }
@@ -177,12 +177,12 @@ func (r *Repository) RequeueExpiredLeases() ([]string, error) {
 // Event persistence (Option B)
 func (r *Repository) SaveEvent(jobID, eventType, payload string) error {
 	now := time.Now().Unix()
-	_, err := r.db.Exec("INSERT INTO events(job_id, event_type, payload, created_at) VALUES(?,?,?,?)", jobID, eventType, payload, now)
+	_, err := r.db.Exec("INSERT INTO events(job_id, event_type, payload, created_at) VALUES($1,$2,$3,$4)", jobID, eventType, payload, now)
 	return err
 }
 
 func (r *Repository) GetRecentEvents(limit int) ([]Event, error) {
-	rows, err := r.db.Query("SELECT id, job_id, event_type, payload, created_at FROM events ORDER BY created_at DESC LIMIT ?", limit)
+	rows, err := r.db.Query("SELECT id, job_id, event_type, payload, created_at FROM events ORDER BY created_at DESC LIMIT $1", limit)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (r *Repository) GetRecentEvents(limit int) ([]Event, error) {
 }
 
 func (r *Repository) GetEventsAfterID(lastID int64) ([]Event, error) {
-	rows, err := r.db.Query("SELECT id, job_id, event_type, payload, created_at FROM events WHERE id > ? ORDER BY id ASC", lastID)
+	rows, err := r.db.Query("SELECT id, job_id, event_type, payload, created_at FROM events WHERE id > $1 ORDER BY id ASC", lastID)
 	if err != nil {
 		return nil, err
 	}

@@ -1,18 +1,45 @@
 version: '3.8'
+
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: jobqueue
+      POSTGRES_USER: jobqueue
+      POSTGRES_PASSWORD: jobqueue_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobqueue"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
     ports:
       - "8080:8080"
-    volumes:
-      - ./jobs.db:/jobs.db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://jobqueue:jobqueue_dev@postgres:5432/jobqueue?sslmode=disable
+
   worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
     depends_on:
-      - api
-    volumes:
-      - ./jobs.db:/jobs.db
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://jobqueue:jobqueue_dev@postgres:5432/jobqueue?sslmode=disable
+    deploy:
+     replicas: 2
+
+volumes:
+  postgres_data:
