@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,6 +29,18 @@ func main() {
 	svc := job.NewService(repo)
 	// worker without HTTP publisher (workers don't broadcast to SSE directly)
 	w := job.NewWorker(svc)
+
+	// Health check endpoint
+	http.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
+	log.Println("Worker service running on port 10000")
+	go func() {
+		if err := http.ListenAndServe(":10000", nil); err != nil {
+			log.Fatalf("http server failed: %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
