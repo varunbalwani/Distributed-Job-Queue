@@ -35,14 +35,9 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "10000"
-	}
-
-	log.Printf("Worker service running on port %s", port)
+	log.Println("Worker service running on port 10000")
 	go func() {
-		if err := http.ListenAndServe(":"+port, nil); err != nil {
+		if err := http.ListenAndServe(":10000", nil); err != nil {
 			log.Fatalf("http server failed: %v", err)
 		}
 	}()
@@ -52,6 +47,9 @@ func main() {
 
 	go w.Start(ctx.Done())
 
+	// Start keep-alive pinger
+	go startKeepAlive("10000")
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
@@ -59,4 +57,27 @@ func main() {
 	cancel()
 	// brief wait
 	time.Sleep(500 * time.Millisecond)
+}
+
+func startKeepAlive(port string) {
+	// Default to localhost if SELF_PING_URL is not set
+	targetURL := os.Getenv("SELF_PING_URL")
+	if targetURL == "" {
+		targetURL = "http://localhost:" + port + "/health"
+	}
+
+	ticker := time.NewTicker(10 * time.Minute) // Ping every 10 minutes
+	defer ticker.Stop()
+
+	log.Printf("Keep-alive pinger started for %s", targetURL)
+
+	for range ticker.C {
+		resp, err := http.Get(targetURL)
+		if err != nil {
+			log.Printf("Keep-alive ping failed: %v", err)
+			continue
+		}
+		resp.Body.Close()
+		log.Printf("Keep-alive ping sent to %s, status: %s", targetURL, resp.Status)
+	}
 }
