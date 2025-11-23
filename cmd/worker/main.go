@@ -34,6 +34,10 @@ func main() {
 	http.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte("ok"))
 	})
+	// Root handler for default health checks
+	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("worker running"))
+	})
 
 	log.Println("Worker service running on port 10000")
 	go func() {
