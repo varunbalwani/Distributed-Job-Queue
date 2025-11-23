@@ -113,6 +113,9 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusTooManyRequests)
 		return
 	}
+	// Ping worker to wake it up if needed
+	go s.PingWorker()
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(j)
 }
@@ -151,9 +154,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	// send initial ping
 	w.Write([]byte("event: ping\ndata: \n\n"))
 	flusher.Flush()
-
-	// Ping worker to wake it up if needed
-	go s.PingWorker()
 
 	// Replay recent events for this client
 	if evs, err := s.svc.RecentEvents(50); err == nil {
@@ -209,7 +209,7 @@ func (s *Server) PingWorker() {
 
 	client := &http.Client{Timeout: 5 * time.Second}
 
-	log.Printf("Pinging worker service at %s...", workerURL)
+	log.Printf("Pinging worker service at %s", workerURL)
 	resp, err := client.Get(workerURL)
 	if err != nil {
 		log.Printf("Warning: Failed to ping worker service: %v", err)
