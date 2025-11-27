@@ -31,10 +31,10 @@ func main() {
 	go srv.PingWorker()
 
 	httpServer := &http.Server{
-		Addr:         ":8080",
-		Handler:      srv.Router(),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		Addr:        ":8080",
+		Handler:     srv.Router(),
+		ReadTimeout: 15 * time.Second,
+		// WriteTimeout: 15 * time.Second, // removed to support SSE
 	}
 
 	log.Println("API listening :8080")

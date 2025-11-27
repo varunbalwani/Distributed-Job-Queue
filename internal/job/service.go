@@ -3,6 +3,7 @@ package job
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"time"
 )
 
@@ -109,7 +110,9 @@ func (s *Service) publishEvent(eventType string, j *Job) {
 	}
 	payloadObj := map[string]interface{}{"id": j.ID, "tenant": j.TenantID, "status": j.Status}
 	b, _ := json.Marshal(payloadObj)
-	_ = s.repo.SaveEvent(j.ID, eventType, string(b))
+	if err := s.repo.SaveEvent(j.ID, eventType, string(b)); err != nil {
+		log.Printf("ERROR: Failed to save event: %v", err)
+	}
 }
 
 func (s *Service) RecentEvents(limit int) ([]Event, error) {
