@@ -96,27 +96,57 @@ func (r *Repository) LeaseNext(leaseSeconds int) (*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() // Safe to call even after Commit succeeds
 
 	now := time.Now().Unix()
 	leaseUntil := now + int64(leaseSeconds)
 
-	row := tx.QueryRow("SELECT id, tenant_id, idempotency_key, payload, retries, max_retries FROM jobs WHERE status='pending' ORDER BY created_at LIMIT 1")
+	// Use FOR UPDATE to lock the row and prevent other workers from selecting it
+	// SKIP LOCKED ensures we skip rows that are already locked by other transactions
+	row := tx.QueryRow(`
+		SELECT id, tenant_id, idempotency_key, payload, retries, max_retries 
+		FROM jobs 
+		WHERE status='pending' 
+		ORDER BY created_at 
+		LIMIT 1 
+		FOR UPDATE SKIP LOCKED
+	`)
+
 	var j Job
 	if err := row.Scan(&j.ID, &j.TenantID, &j.IdempotencyKey, &j.Payload, &j.Retries, &j.MaxRetries); err != nil {
 		if err == sql.ErrNoRows {
+			// No pending jobs available
 			return nil, nil
 		}
 		return nil, err
 	}
 
-	if _, err := tx.Exec("UPDATE jobs SET status='running', lease_until=$1, updated_at=$2 WHERE id=$3", leaseUntil, now, j.ID); err != nil {
+	// Update the job status - row is already locked, so this is guaranteed to succeed
+	result, err := tx.Exec(`
+		UPDATE jobs 
+		SET status='running', lease_until=$1, updated_at=$2 
+		WHERE id=$3 AND status='pending'
+	`, leaseUntil, now, j.ID)
+	if err != nil {
 		return nil, err
 	}
 
+	// Verify that exactly one row was updated
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if rowsAffected == 0 {
+		// This should never happen due to FOR UPDATE, but it's a safety check
+		return nil, errors.New("job was already leased by another worker")
+	}
+
+	// Commit the transaction - this releases the row lock
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+
+	// Populate the returned job object with the new values
 	j.Status = "running"
 	j.LeaseUntil = leaseUntil
 	j.UpdatedAt = now
