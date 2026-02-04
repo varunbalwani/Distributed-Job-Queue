@@ -15,16 +15,25 @@ import (
 
 // SSE broadcaster simple implementation
 type Broadcaster struct {
+	mu      sync.RWMutex
 	clients map[chan string]struct{}
 }
 
 func NewBroadcaster() *Broadcaster { return &Broadcaster{clients: map[chan string]struct{}{}} }
 
 func (b *Broadcaster) Register(c chan string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.clients[c] = struct{}{}
 }
-func (b *Broadcaster) Unregister(c chan string) { delete(b.clients, c) }
+func (b *Broadcaster) Unregister(c chan string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.clients, c)
+}
 func (b *Broadcaster) Publish(msg string) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	for c := range b.clients {
 		select {
 		case c <- msg:
