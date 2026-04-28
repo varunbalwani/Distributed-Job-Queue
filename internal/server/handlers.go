@@ -122,8 +122,6 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusTooManyRequests)
 		return
 	}
-	// Ping worker to wake it up if needed
-	go s.PingWorker()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(j)
