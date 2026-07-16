@@ -25,6 +25,7 @@ go.work
 CHALLENGES.md
 OPTIMIZATION.md
 CLEANUP_SUMMARY.md
+NOTES.md
 
 # Test artifacts
 tests/test.db
